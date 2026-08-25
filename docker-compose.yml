@@ -1,0 +1,117 @@
+services:
+
+  # ==========================================================
+  # PostgreSQL
+  # ==========================================================
+
+  postgres:
+    image: postgres:16
+    container_name: documind-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: documind
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d documind"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - documind-network
+
+
+  # ==========================================================
+  # Qdrant
+  # ==========================================================
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    container_name: documind-qdrant
+    restart: unless-stopped
+
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+    networks:
+      - documind-network
+
+
+  # ==========================================================
+  # FastAPI Backend
+  # ==========================================================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: documind-backend
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env.docker
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - uploads_data:/app/data/uploads
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    networks:
+      - documind-network
+
+
+# ==========================================================
+# Persistent Volumes
+# ==========================================================
+
+volumes:
+
+  postgres_data:
+    external: true
+    name: documind-ai-starter_postgres_data
+
+  qdrant_data:
+    external: true
+    name: documind-ai-starter_qdrant_data
+
+  uploads_data:
+    name: documind_uploads_data
+
+
+# ==========================================================
+# Network
+# ==========================================================
+
+networks:
+
+  documind-network:
+    name: documind-network
+    driver: bridge

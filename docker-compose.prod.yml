@@ -1,0 +1,124 @@
+services:
+
+  # ==========================================================
+  # PostgreSQL
+  # ==========================================================
+
+  postgres:
+    image: postgres:16
+    container_name: documind-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: documind
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d documind"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - documind-network
+
+
+  # ==========================================================
+  # Qdrant
+  # ==========================================================
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    container_name: documind-qdrant
+    restart: unless-stopped
+
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+    networks:
+      - documind-network
+
+
+  # ==========================================================
+  # Ollama
+  # ==========================================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: documind-ollama
+    restart: unless-stopped
+
+    volumes:
+      - ollama_data:/root/.ollama
+
+    networks:
+      - documind-network
+
+
+  # ==========================================================
+  # FastAPI Backend
+  # ==========================================================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: documind-backend
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env.production
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - uploads_data:/app/data/uploads
+
+    depends_on:
+
+      postgres:
+        condition: service_healthy
+
+      qdrant:
+        condition: service_started
+
+      ollama:
+        condition: service_started
+
+    networks:
+      - documind-network
+
+
+# ==========================================================
+# Volumes
+# ==========================================================
+
+volumes:
+
+  postgres_data:
+
+  qdrant_data:
+
+  ollama_data:
+
+  uploads_data:
+
+
+# ==========================================================
+# Network
+# ==========================================================
+
+networks:
+
+  documind-network:
+    driver: bridge
